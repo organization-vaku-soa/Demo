@@ -1,0 +1,33 @@
+﻿@page "/"
+@using Demo.Core.ViewModels
+@using Demo.Core.Models
+@inherits Demo.BlazorApp.Helpers.ViewModelComponentBase<NotesViewModel>
+
+<h3>Gestor de Notas</h3>
+
+<div style="display:flex; gap:8px;">
+    <input placeholder="Escribe una nota..." @bind-value="Vm.NewNote" @bind-value:event="oninput" />
+    <button disabled="@(!Vm.AddNoteCommand.CanExecute(null))"
+            @onclick="() => Vm.AddNoteCommand.Execute(null)">
+        Agregar
+    </button>
+</div>
+
+<ul>
+    @foreach (var note in Vm.Notes)
+    {
+        <li style="margin:6px 0;">
+            @note.Title
+            <button @onclick="() => Vm.RemoveNoteCommand.Execute(note)">
+                Eliminar
+            </button>
+        </li>
+    }
+</ul>
+
+<p><b>Última acción:</b> @Vm.LastAction</p>
+
+
+@code {
+
+}
