@@ -4,34 +4,75 @@
              x:Class="Demo.AppMaui.NotesPage"
              x:Name="Root" 
              Title="Notes Page">
-    <VerticalStackLayout Padding="20" Spacing="12">
+    <VerticalStackLayout Padding="20" Spacing="16" BackgroundColor="#F5F7FA">
 
-        <Label Text="Gestor de Notas" FontSize="24" />
+        <!-- Título -->
+        <Label Text="Gestor de Notas"
+           FontSize="28"
+           FontAttributes="Bold"
+           HorizontalOptions="Center"
+           TextColor="#333" />
 
         <!-- Entrada y botón de agregar -->
-        <HorizontalStackLayout>
+        <HorizontalStackLayout Spacing="10" Padding="4">
             <Entry Placeholder="Escribe una nota..."
-                   Text="{Binding NewNote}" WidthRequest="200"/>
+               Text="{Binding NewNote}"
+               WidthRequest="220"
+               BackgroundColor="White"
+               TextColor="#333"
+               PlaceholderColor="#888"
+               Margin="0"
+               HeightRequest="44"
+               VerticalOptions="Center"
+               HorizontalOptions="FillAndExpand"
+               />
             <Button Text="Agregar"
-                    Command="{Binding AddNoteCommand}" />
+                Command="{Binding AddNoteCommand}"
+                BackgroundColor="#4CAF50"
+                TextColor="White"
+                CornerRadius="8"
+                Padding="12,6"
+                />
         </HorizontalStackLayout>
 
         <!-- Última acción -->
-        <Label Text="{Binding LastAction}" FontAttributes="Italic"/>
+        <Label Text="{Binding LastAction}"
+           FontAttributes="Italic"
+           FontSize="14"
+           TextColor="#555"
+           HorizontalOptions="Center"
+           />
 
         <!-- Lista de notas -->
         <CollectionView ItemsSource="{Binding Notes}">
             <CollectionView.ItemTemplate>
                 <DataTemplate>
-                    <Grid ColumnDefinitions="*,Auto" Padding="6">
-                        <Label Grid.Column="0" Text="{Binding Title}" VerticalOptions="Center"/>
-                        <Button Grid.Column="1" Text="Eliminar"
+                    <Frame Margin="0,6"
+                       Padding="10"
+                       BackgroundColor="White"
+                       BorderColor="#ddd"
+                       CornerRadius="10"
+                       HasShadow="True">
+                        <Grid ColumnDefinitions="*,Auto">
+                            <Label Grid.Column="0"
+                               Text="{Binding Title}"
+                               VerticalOptions="Center"
+                               FontSize="16"
+                               TextColor="#222" />
+                            <Button Grid.Column="1"
+                                Text="Eliminar"
+                                BackgroundColor="#E53935"
+                                TextColor="White"
+                                CornerRadius="8"
+                                Padding="10,4"
                                 Command="{Binding Source={x:Reference Root}, Path=BindingContext.RemoveNoteCommand}"
                                 CommandParameter="{Binding .}" />
-                    </Grid>
+                        </Grid>
+                    </Frame>
                 </DataTemplate>
             </CollectionView.ItemTemplate>
         </CollectionView>
 
     </VerticalStackLayout>
+
 </ContentPage>
