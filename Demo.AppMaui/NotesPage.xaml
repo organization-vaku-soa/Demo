@@ -27,7 +27,7 @@
            Margin="20"/>
 
             <!-- Botón de agregar -->
-            <Button Text="Agregar"
+            <Button Text="Agregar."
             Command="{Binding AddNoteCommand}"
             BackgroundColor="#4CAF50"
             TextColor="White"
