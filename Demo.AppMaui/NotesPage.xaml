@@ -14,26 +14,29 @@
            TextColor="#333" />
 
         <!-- Entrada y botón de agregar -->
-        <HorizontalStackLayout Spacing="10" Padding="4">
+        <Grid ColumnDefinitions="*,Auto" Padding="4">
+            <!-- Entry para la nueva nota -->
             <Entry Placeholder="Escribe una nota..."
-               Text="{Binding NewNote}"
-               WidthRequest="220"
-               BackgroundColor="White"
-               TextColor="#333"
-               PlaceholderColor="#888"
-               Margin="0"
-               HeightRequest="44"
-               VerticalOptions="Center"
-               HorizontalOptions="FillAndExpand"
-               />
+           Text="{Binding NewNote}"
+           BackgroundColor="White"
+           TextColor="#333"
+           PlaceholderColor="#888"
+           HeightRequest="44"
+           VerticalOptions="Center"
+           Grid.Column="0"
+           Margin="20"/>
+
+            <!-- Botón de agregar -->
             <Button Text="Agregar"
-                Command="{Binding AddNoteCommand}"
-                BackgroundColor="#4CAF50"
-                TextColor="White"
-                CornerRadius="8"
-                Padding="12,6"
-                />
-        </HorizontalStackLayout>
+            Command="{Binding AddNoteCommand}"
+            BackgroundColor="#4CAF50"
+            TextColor="White"
+            CornerRadius="8"
+            Padding="12,6"
+            VerticalOptions="Center"
+            Grid.Column="1"/>
+        </Grid>
+
 
         <!-- Última acción -->
         <Label Text="{Binding LastAction}"
