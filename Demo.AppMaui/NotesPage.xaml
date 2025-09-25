@@ -15,6 +15,7 @@
 
         <!-- Entrada y botón de agregar -->
         <Grid ColumnDefinitions="*,Auto" Padding="4">
+            <Label Text="Nueva Nota:"/>
             <!-- Entry para la nueva nota -->
             <Entry Placeholder="Escribe una nota..."
            Text="{Binding NewNote}"
