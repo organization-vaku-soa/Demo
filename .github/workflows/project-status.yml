@@ -1,0 +1,65 @@
+name: Update Project Status
+
+on:
+  issues:
+    types: [opened, closed, reopened]
+  pull_request:
+    types: [opened, synchronize, closed]
+
+jobs:
+  update-status:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Decide status for Issues
+        if: github.event_name == 'issues'
+        run: |
+          if [ "${{ github.event.action }}" = "opened" ]; then
+            echo "STATUS=${{ secrets.STATUS_BACKLOG }}" >> $GITHUB_ENV
+          elif [ "${{ github.event.action }}" = "reopened" ]; then
+            echo "STATUS=${{ secrets.STATUS_INPROGRESS }}" >> $GITHUB_ENV
+          elif [ "${{ github.event.action }}" = "closed" ]; then
+            echo "STATUS=${{ secrets.STATUS_DONE }}" >> $GITHUB_ENV
+          fi
+          echo "ITEM_ID=${{ github.event.issue.node_id }}" >> $GITHUB_ENV
+
+      - name: Decide status for PRs
+        if: github.event_name == 'pull_request'
+        run: |
+          if [ "${{ github.event.action }}" = "opened" ]; then
+            echo "STATUS=${{ secrets.STATUS_BACKLOG }}" >> $GITHUB_ENV
+          elif [ "${{ github.event.action }}" = "synchronize" ]; then
+            echo "STATUS=${{ secrets.STATUS_INPROGRESS }}" >> $GITHUB_ENV
+          elif [ "${{ github.event.action }}" = "closed" ] && [ "${{ github.event.pull_request.merged }}" = "true" ]; then
+            echo "STATUS=${{ secrets.STATUS_DONE }}" >> $GITHUB_ENV
+          elif [ "${{ github.event.action }}" = "closed" ]; then
+            echo "STATUS=${{ secrets.STATUS_REVIEW }}" >> $GITHUB_ENV
+          fi
+          echo "ITEM_ID=${{ github.event.pull_request.node_id }}" >> $GITHUB_ENV
+
+      - name: Update project status
+        env:
+          GH_TOKEN: ${{ secrets.PROJECT_TOKEN }}
+          PROJECT_ID: ${{ secrets.PROJECT_ID }}
+          STATUS_FIELD: ${{ secrets.STATUS_FIELD }}
+        run: |
+          if [ -n "$STATUS" ]; then
+            gh api graphql -f query='
+              mutation($project:ID!, $item:ID!, $field:ID!, $status:String!) {
+                updateProjectV2ItemFieldValue(
+                  input: {
+                    projectId: $project
+                    itemId: $item
+                    fieldId: $field
+                    value: { singleSelectOptionId: $status }
+                  }
+                ) {
+                  projectV2Item { id }
+                }
+              }' \
+              -F project=$PROJECT_ID \
+              -F item=$ITEM_ID \
+              -F field=$STATUS_FIELD \
+              -F status=$STATUS
+          else
+            echo "⚠️ No STATUS set for this event"
+          fi
