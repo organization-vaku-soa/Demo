@@ -1,0 +1,310 @@
+name: Update Project V2 Status Automation
+
+on:
+  issues:
+    types: [opened, closed]
+  pull_request:
+    types: [opened, closed, review_requested, review_submitted]
+  push:
+    branches: [ '**' ]
+
+permissions:
+  issues: write
+  contents: read
+  pull-requests: write
+
+jobs:
+  update-project-status:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Update Project V2 status (GraphQL)
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.PROJECT_TOKEN }}
+          script: |
+            const PROJECT_URL = process.env.PROJECT_URL ||
+              'https://github.com/orgs/organization-vaku-soa/projects/6';
+            const STATUS_FIELD_NAME = process.env.STATUS_FIELD_NAME || 'Status';
+
+            const NAMES = {
+              BACKLOG: process.env.BACKLOG_NAME || 'Backlog',
+              IN_PROCESS: process.env.IN_PROCESS_NAME || 'In process',
+              IN_REVIEW: process.env.IN_REVIEW_NAME || 'In review',
+              DONE: process.env.DONE_NAME || 'Done',
+            };
+
+            // ---------------------------------------
+            function parseProjectUrl(url) {
+              const u = new URL(url);
+              const parts = u.pathname.split('/').filter(Boolean);
+              if (parts[0] === 'orgs' && parts[2] === 'projects') {
+                return { owner: parts[1], ownerType: 'org', projectNumber: parseInt(parts[3], 10) };
+              }
+              if (parts[0] === 'users' && parts[2] === 'projects') {
+                return { owner: parts[1], ownerType: 'user', projectNumber: parseInt(parts[3], 10) };
+              }
+              if (parts.length >= 4 && parts[2] === 'projects') {
+                return { owner: parts[0], repo: parts[1], ownerType: 'repo', projectNumber: parseInt(parts[3], 10) };
+              }
+              const num = parseInt(parts[parts.length - 1], 10);
+              return { owner: parts[0], ownerType: 'org', projectNumber: isNaN(num) ? null : num };
+            }
+
+            const projectInfo = parseProjectUrl(PROJECT_URL);
+            if (!projectInfo.projectNumber) {
+              core.setFailed(`No pude determinar el número del project desde: ${PROJECT_URL}`);
+              return;
+            }
+
+            async function getProjectNodeAndFields({ owner, repo, ownerType, projectNumber }) {
+              if (ownerType === 'repo') {
+                const q = `
+query($owner:String!, $repo:String!, $number:Int!){
+  repository(owner:$owner,name:$repo){
+    projectV2(number:$number){
+      id
+      fields(first:100){
+        nodes {
+          id
+          name
+          ... on ProjectV2SingleSelectField {
+            options { id name }
+          }
+        }
+      }
+    }
+  }
+}`;
+                const res = await github.graphql(q, { owner, repo, number: projectNumber });
+                return res.repository?.projectV2 || null;
+              } else if (ownerType === 'org') {
+                const q = `
+query($login:String!,$number:Int!){
+  organization(login:$login){
+    projectV2(number:$number){
+      id
+      fields(first:100){
+        nodes {
+          id
+          name
+          ... on ProjectV2SingleSelectField {
+            options { id name }
+          }
+        }
+      }
+    }
+  }
+}`;
+                const res = await github.graphql(q, { login: owner, number: projectNumber });
+                return res.organization?.projectV2 || null;
+              } else {
+                const q = `
+query($login:String!,$number:Int!){
+  user(login:$login){
+    projectV2(number:$number){
+      id
+      fields(first:100){
+        nodes {
+          id
+          name
+          ... on ProjectV2SingleSelectField {
+            options { id name }
+          }
+        }
+      }
+    }
+  }
+}`;
+                const res = await github.graphql(q, { login: owner, number: projectNumber });
+                return res.user?.projectV2 || null;
+              }
+            }
+
+            async function findOrCreateProjectItemForContent(contentNodeId, projectNodeId) {
+              const q = `
+query($id:ID!){
+  node(id:$id){
+    ... on Issue {
+      projectItems(first:100){
+        nodes { id project { id } }
+      }
+    }
+    ... on PullRequest {
+      projectItems(first:100){
+        nodes { id project { id } }
+      }
+    }
+  }
+}`;
+              const r = await github.graphql(q, { id: contentNodeId });
+              const node = r.node;
+              if (node && node.projectItems) {
+                for (const n of node.projectItems.nodes) {
+                  if (n.project && n.project.id === projectNodeId) {
+                    return n.id;
+                  }
+                }
+              }
+              const m = `
+mutation($projectId:ID!, $contentId:ID!){
+  addProjectV2ItemById(input: { projectId: $projectId, contentId: $contentId }) {
+    item { id }
+  }
+}`;
+              const addResp = await github.graphql(m, { projectId: projectNodeId, contentId: contentNodeId });
+              return addResp.addProjectV2ItemById.item.id;
+            }
+
+            async function updateSingleSelect(projectId, itemId, fieldId, optionId) {
+              const m = `
+mutation($projectId:ID!, $itemId:ID!, $fieldId:ID!, $optionId:String!){
+  updateProjectV2ItemFieldValue(input:{
+    projectId: $projectId,
+    itemId: $itemId,
+    fieldId: $fieldId,
+    value: { singleSelectOptionId: $optionId }
+  }){
+    projectV2Item { id }
+  }
+}`;
+              await github.graphql(m, { projectId, itemId, fieldId, optionId });
+            }
+
+            const projectNode = await getProjectNodeAndFields(projectInfo);
+            if (!projectNode) {
+              core.setFailed(`No pude obtener el Project en: ${PROJECT_URL}`);
+              return;
+            }
+            const projectNodeId = projectNode.id;
+            const statusField = projectNode.fields.nodes.find(f => f.name === STATUS_FIELD_NAME);
+            if (!statusField) {
+              core.setFailed(`No existe un campo "${STATUS_FIELD_NAME}" en el Project.`);
+              return;
+            }
+            if (!statusField.options) {
+              core.setFailed(`El campo "${STATUS_FIELD_NAME}" no tiene opciones (debe ser single-select).`);
+              return;
+            }
+            const optionMap = {};
+            for (const opt of statusField.options) {
+              optionMap[opt.name] = opt.id;
+            }
+            for (const k of Object.values(NAMES)) {
+              if (!optionMap[k]) {
+                core.info(`Advertencia: la opción "${k}" no fue encontrada en el campo ${STATUS_FIELD_NAME}.`);
+              }
+            }
+
+            async function moveIssueByNumber(owner, repo, issueNumber, targetOptionName) {
+              try {
+                const q = `
+query($owner:String!,$repo:String!,$number:Int!){
+  repository(owner:$owner,name:$repo){
+    issue(number:$number){ id }
+    pullRequest(number:$number){ id }
+  }
+}`;
+                const res = await github.graphql(q, { owner, repo, number: issueNumber });
+                const contentNodeId = res.repository.issue?.id || res.repository.pullRequest?.id;
+                if (!contentNodeId) {
+                  core.info(`No encontré issue/PR #${issueNumber} en ${owner}/${repo}.`);
+                  return;
+                }
+                const itemId = await findOrCreateProjectItemForContent(contentNodeId, projectNodeId);
+                const optionId = optionMap[targetOptionName];
+                if (!optionId) {
+                  core.info(`No existe optionId para "${targetOptionName}", no actualizo.`);
+                  return;
+                }
+                await updateSingleSelect(projectNodeId, itemId, statusField.id, optionId);
+                core.info(`✅ Movido #${issueNumber} -> ${targetOptionName}`);
+              } catch (err) {
+                core.warning(`Error moviendo #${issueNumber}: ${err.message || err}`);
+              }
+            }
+
+            const evt = context.eventName;
+            core.info(`Evento recibido: ${evt} - action: ${context.payload.action || ''}`);
+
+            if (evt === 'issues') {
+              const action = context.payload.action;
+              const repoOwner = context.payload.repository.owner.login;
+              const repoName = context.payload.repository.name;
+              const issueNumber = context.payload.issue.number;
+
+              if (action === 'opened') {
+                await moveIssueByNumber(repoOwner, repoName, issueNumber, NAMES.BACKLOG);
+              } else if (action === 'closed') {
+                await moveIssueByNumber(repoOwner, repoName, issueNumber, NAMES.DONE);
+              } else {
+                core.info('Evento issues no manejado: ' + action);
+              }
+              return;
+            }
+
+            if (evt === 'pull_request') {
+              const action = context.payload.action;
+              const repoOwner = context.payload.repository.owner.login;
+              const repoName = context.payload.repository.name;
+              const prNumber = context.payload.pull_request.number;
+
+              const closingQ = `
+query($owner:String!,$repo:String!,$number:Int!){
+  repository(owner:$owner,name:$repo){
+    pullRequest(number:$number){
+      closingIssuesReferences(first:50){
+        nodes { number }
+      }
+    }
+  }
+}`;
+              const closingRes = await github.graphql(closingQ, { owner: repoOwner, repo: repoName, number: prNumber });
+              const linkedIssues = (closingRes.repository.pullRequest?.closingIssuesReferences?.nodes || []).map(n => n.number);
+
+              if (linkedIssues.length === 0) {
+                const body = context.payload.pull_request.body || '';
+                const refs = [...body.matchAll(/#(\d+)/g)].map(m => parseInt(m[1],10));
+                refs.forEach(n => { if (!linkedIssues.includes(n)) linkedIssues.push(n); });
+              }
+
+              if (action === 'opened') {
+                for (const num of linkedIssues) await moveIssueByNumber(repoOwner, repoName, num, NAMES.IN_PROCESS);
+                return;
+              }
+              if (action === 'review_requested') {
+                for (const num of linkedIssues) await moveIssueByNumber(repoOwner, repoName, num, NAMES.IN_REVIEW);
+                return;
+              }
+              if (action === 'review_submitted') {
+                const reviewState = context.payload.review?.state;
+                core.info('Review enviado, estado: ' + reviewState);
+                if (reviewState === 'APPROVED') {
+                  for (const num of linkedIssues) await moveIssueByNumber(repoOwner, repoName, num, NAMES.IN_REVIEW);
+                }
+                return;
+              }
+              if (action === 'closed') {
+                if (context.payload.pull_request.merged) {
+                  for (const num of linkedIssues) await moveIssueByNumber(repoOwner, repoName, num, NAMES.DONE);
+                }
+                return;
+              }
+              core.info('pull_request action no manejada: ' + action);
+              return;
+            }
+
+            if (evt === 'push') {
+              const p = context.payload;
+              const repoOwner = p.repository.owner.name || p.repository.owner.login;
+              const repoName = p.repository.name;
+              const messages = (p.commits || []).map(c => c.message).join('\n');
+              const refs = [...messages.matchAll(/#(\d+)/g)].map(m => parseInt(m[1],10));
+              const unique = Array.from(new Set(refs));
+              for (const num of unique) {
+                await moveIssueByNumber(repoOwner, repoName, num, NAMES.IN_PROCESS);
+              }
+              return;
+            }
+
+            core.info('Evento no manejado por el workflow.');
