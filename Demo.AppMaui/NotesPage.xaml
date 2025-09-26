@@ -7,7 +7,7 @@
     <VerticalStackLayout Padding="20" Spacing="16" BackgroundColor="#F5F7FA">
 
         <!-- Título -->
-        <Label Text="Gestor de Notas"
+        <Label Text="GESTOR DE NOTAS - "
            FontSize="28"
            FontAttributes="Bold"
            HorizontalOptions="Center"
