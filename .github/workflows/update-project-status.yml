@@ -60,62 +60,64 @@ jobs:
             async function getProjectNodeAndFields({ owner, repo, ownerType, projectNumber }) {
               if (ownerType === 'repo') {
                 const q = `
-query($owner:String!, $repo:String!, $number:Int!){
-  repository(owner:$owner,name:$repo){
-    projectV2(number:$number){
-      id
-      fields(first:100){
-        nodes {
-          id
-          name
-          ... on ProjectV2SingleSelectField {
-            options { id name }
-          }
-        }
-      }
-    }
-  }
-}`;
-                const res = await github.graphql(q, { owner, repo, number: projectNumber });
-                return res.repository?.projectV2 || null;
+              query($owner:String!, $repo:String!, $number:Int!){
+                repository(owner:$owner,name:$repo){
+                  projectV2(number:$number){
+                    id
+                    fields(first:100){
+                      nodes {
+                        id
+                        name
+                        ... on ProjectV2SingleSelectField {
+                          options { id name }
+                        }
+                      }
+                    }
+                  }
+                }
+              }`;
+
+              const res = await github.graphql(q, { owner, repo, number: projectNumber });
+              return res.repository?.projectV2 || null;
               } else if (ownerType === 'org') {
                 const q = `
-query($login:String!,$number:Int!){
-  organization(login:$login){
-    projectV2(number:$number){
-      id
-      fields(first:100){
-        nodes {
-          id
-          name
-          ... on ProjectV2SingleSelectField {
-            options { id name }
-          }
-        }
-      }
-    }
-  }
-}`;
+                      query($login:String!,$number:Int!){
+                        organization(login:$login){
+                          projectV2(number:$number){
+                            id
+                            fields(first:100){
+                              nodes {
+                                id
+                                name
+                                ... on ProjectV2SingleSelectField {
+                                  options { id name }
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }`;
+
                 const res = await github.graphql(q, { login: owner, number: projectNumber });
                 return res.organization?.projectV2 || null;
               } else {
                 const q = `
-query($login:String!,$number:Int!){
-  user(login:$login){
-    projectV2(number:$number){
-      id
-      fields(first:100){
-        nodes {
-          id
-          name
-          ... on ProjectV2SingleSelectField {
-            options { id name }
-          }
-        }
-      }
-    }
-  }
-}`;
+              query($login:String!,$number:Int!){
+                user(login:$login){
+                  projectV2(number:$number){
+                    id
+                    fields(first:100){
+                      nodes {
+                        id
+                        name
+                        ... on ProjectV2SingleSelectField {
+                          options { id name }
+                        }
+                      }
+                    }
+                  }
+                }
+              }`;
                 const res = await github.graphql(q, { login: owner, number: projectNumber });
                 return res.user?.projectV2 || null;
               }
@@ -123,20 +125,20 @@ query($login:String!,$number:Int!){
 
             async function findOrCreateProjectItemForContent(contentNodeId, projectNodeId) {
               const q = `
-query($id:ID!){
-  node(id:$id){
-    ... on Issue {
-      projectItems(first:100){
-        nodes { id project { id } }
-      }
-    }
-    ... on PullRequest {
-      projectItems(first:100){
-        nodes { id project { id } }
-      }
-    }
-  }
-}`;
+              query($id:ID!){
+                node(id:$id){
+                  ... on Issue {
+                    projectItems(first:100){
+                      nodes { id project { id } }
+                    }
+                  }
+                  ... on PullRequest {
+                    projectItems(first:100){
+                      nodes { id project { id } }
+                    }
+                  }
+                }
+              }`;
               const r = await github.graphql(q, { id: contentNodeId });
               const node = r.node;
               if (node && node.projectItems) {
@@ -147,27 +149,27 @@ query($id:ID!){
                 }
               }
               const m = `
-mutation($projectId:ID!, $contentId:ID!){
-  addProjectV2ItemById(input: { projectId: $projectId, contentId: $contentId }) {
-    item { id }
-  }
-}`;
+              mutation($projectId:ID!, $contentId:ID!){
+                addProjectV2ItemById(input: { projectId: $projectId, contentId: $contentId }) {
+                  item { id }
+                }
+              }`;
               const addResp = await github.graphql(m, { projectId: projectNodeId, contentId: contentNodeId });
               return addResp.addProjectV2ItemById.item.id;
             }
 
             async function updateSingleSelect(projectId, itemId, fieldId, optionId) {
               const m = `
-mutation($projectId:ID!, $itemId:ID!, $fieldId:ID!, $optionId:String!){
-  updateProjectV2ItemFieldValue(input:{
-    projectId: $projectId,
-    itemId: $itemId,
-    fieldId: $fieldId,
-    value: { singleSelectOptionId: $optionId }
-  }){
-    projectV2Item { id }
-  }
-}`;
+              mutation($projectId:ID!, $itemId:ID!, $fieldId:ID!, $optionId:String!){
+                updateProjectV2ItemFieldValue(input:{
+                  projectId: $projectId,
+                  itemId: $itemId,
+                  fieldId: $fieldId,
+                  value: { singleSelectOptionId: $optionId }
+                }){
+                  projectV2Item { id }
+                }
+              }`;
               await github.graphql(m, { projectId, itemId, fieldId, optionId });
             }
 
@@ -199,12 +201,12 @@ mutation($projectId:ID!, $itemId:ID!, $fieldId:ID!, $optionId:String!){
             async function moveIssueByNumber(owner, repo, issueNumber, targetOptionName) {
               try {
                 const q = `
-query($owner:String!,$repo:String!,$number:Int!){
-  repository(owner:$owner,name:$repo){
-    issue(number:$number){ id }
-    pullRequest(number:$number){ id }
-  }
-}`;
+                query($owner:String!,$repo:String!,$number:Int!){
+                  repository(owner:$owner,name:$repo){
+                    issue(number:$number){ id }
+                    pullRequest(number:$number){ id }
+                  }
+                }`;
                 const res = await github.graphql(q, { owner, repo, number: issueNumber });
                 const contentNodeId = res.repository.issue?.id || res.repository.pullRequest?.id;
                 if (!contentNodeId) {
@@ -250,15 +252,16 @@ query($owner:String!,$repo:String!,$number:Int!){
               const prNumber = context.payload.pull_request.number;
 
               const closingQ = `
-query($owner:String!,$repo:String!,$number:Int!){
-  repository(owner:$owner,name:$repo){
-    pullRequest(number:$number){
-      closingIssuesReferences(first:50){
-        nodes { number }
-      }
-    }
-  }
-}`;
+              query($owner:String!,$repo:String!,$number:Int!){
+                repository(owner:$owner,name:$repo){
+                  pullRequest(number:$number){
+                    closingIssuesReferences(first:50){
+                      nodes { number }
+                    }
+                  }
+                }
+              }`;
+              
               const closingRes = await github.graphql(closingQ, { owner: repoOwner, repo: repoName, number: prNumber });
               const linkedIssues = (closingRes.repository.pullRequest?.closingIssuesReferences?.nodes || []).map(n => n.number);
 
