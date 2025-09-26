@@ -66,8 +66,10 @@ jobs:
                     id
                     fields(first:100){
                       nodes {
-                        id
-                        name
+                        ... on ProjectV2FieldCommon {
+                          id
+                          name
+                        }
                         ... on ProjectV2SingleSelectField {
                           options { id name }
                         }
@@ -87,8 +89,10 @@ jobs:
                             id
                             fields(first:100){
                               nodes {
-                                id
-                                name
+                                ... on ProjectV2FieldCommon {
+                                  id
+                                  name
+                                }
                                 ... on ProjectV2SingleSelectField {
                                   options { id name }
                                 }
@@ -102,22 +106,24 @@ jobs:
                 return res.organization?.projectV2 || null;
               } else {
                 const q = `
-              query($login:String!,$number:Int!){
-                user(login:$login){
-                  projectV2(number:$number){
-                    id
-                    fields(first:100){
-                      nodes {
-                        id
-                        name
-                        ... on ProjectV2SingleSelectField {
-                          options { id name }
+                query($login:String!,$number:Int!){
+                  user(login:$login){
+                    projectV2(number:$number){
+                      id
+                      fields(first:100){
+                        nodes {
+                          ... on ProjectV2FieldCommon {
+                            id
+                            name
+                          }
+                          ... on ProjectV2SingleSelectField {
+                            options { id name }
+                          }
                         }
                       }
                     }
                   }
-                }
-              }`;
+                }`;
                 const res = await github.graphql(q, { login: owner, number: projectNumber });
                 return res.user?.projectV2 || null;
               }
